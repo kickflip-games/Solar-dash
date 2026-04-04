@@ -31,7 +31,7 @@ export default function App() {
   const lastHandRef = useRef(0);
   useEffect(() => {
     if (handDetected) {
-      lastHandRef.current = performance.now();
+      lastHandRef.current = Date.now();
     }
   });
 

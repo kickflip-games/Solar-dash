@@ -44,10 +44,11 @@ export function useHandTracking({ enabled = true } = {}) {
   // smoothed finger X [0,1]
   const rawXRef     = useRef(0.5);
   const smoothXRef  = useRef(0.5);
-  const [fingerX, setFingerX]       = useState(0.5);
+  const [fingerX, setFingerX]           = useState(0.5);
   const [handDetected, setHandDetected] = useState(false);
+  // Mirror handDetected in a ref so the onResults closure doesn't go stale
+  const handDetectedRef = useRef(false);
 
-  const lastHandRef = useRef(Date.now());
   const handsRef    = useRef(null);
   const mountedRef  = useRef(true);
 
@@ -144,11 +145,16 @@ export function useHandTracking({ enabled = true } = {}) {
             // MediaPipe X is mirrored by default in selfie mode – 0=left, 1=right
             // We keep it as-is: left side of screen = 0, right = 1.
             rawXRef.current = tip.x;
-            lastHandRef.current = Date.now();
 
-            if (!handDetected && mountedRef.current) setHandDetected(true);
+            if (!handDetectedRef.current) {
+              handDetectedRef.current = true;
+              setHandDetected(true);
+            }
           } else {
-            if (handDetected && mountedRef.current) setHandDetected(false);
+            if (handDetectedRef.current) {
+              handDetectedRef.current = false;
+              setHandDetected(false);
+            }
           }
         });
 
@@ -187,8 +193,7 @@ export function useHandTracking({ enabled = true } = {}) {
         videoEl.srcObject = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
+  }, [enabled, drawLandmarks]);
 
   return { fingerX, handDetected, videoRef, canvasRef };
 }

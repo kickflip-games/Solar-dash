@@ -190,6 +190,9 @@ function Player({ stateRef, fingerX, handDetected, lastHandRef }) {
 // ─── Obstacle pool ────────────────────────────────────────────────────────────
 // Each obstacle is a ref-tracked mesh in the scene.
 // We recycle / re-use them rather than mount/unmount for performance.
+//
+// Each pool slot stores refs to ALL three obstacle type meshes so we can
+// switch which mesh is visible at spawn time without a ref-assignment race.
 function ObstacleManager({ stateRef, onCollision }) {
   const poolRef  = useRef([]);
   const groupRef = useRef();
@@ -201,7 +204,8 @@ function ObstacleManager({ stateRef, onCollision }) {
   useEffect(() => {
     poolRef.current = Array.from({ length: POOL_SIZE }, () => ({
       active: false,
-      mesh: null,
+      meshes: [null, null, null], // one mesh ref per obstacle type
+      mesh:   null,               // currently active mesh
       typeIdx: 0,
     }));
   }, []);
@@ -218,6 +222,8 @@ function ObstacleManager({ stateRef, onCollision }) {
     slot.typeIdx = typeIdx;
     slot.lane    = lane;
     slot.z       = OBSTACLE_SPAWN_Z;
+    // Select the pre-assigned mesh for this obstacle type
+    slot.mesh    = slot.meshes[typeIdx];
 
     if (slot.mesh) {
       slot.mesh.position.set(LANE_OFFSETS[lane], type.h / 2 - 0.4, OBSTACLE_SPAWN_Z);
@@ -288,18 +294,18 @@ function ObstacleManager({ stateRef, onCollision }) {
     }
   });
 
-  // Render pool meshes (hidden when inactive)
-  const poolMeshes = Array.from({ length: POOL_SIZE }, (_, idx) => {
-    // We render all three obstacle types; visibility is toggled via ref
-    return OBSTACLE_TYPES.map((type, ti) => (
+  // Render pool meshes: POOL_SIZE slots × OBSTACLE_TYPES meshes each.
+  // All start hidden. On spawn, the correct typeIdx mesh becomes visible.
+  const poolMeshes = Array.from({ length: POOL_SIZE }, (_, idx) =>
+    OBSTACLE_TYPES.map((type, ti) => (
       <mesh
         key={`obs-${idx}-${ti}`}
         visible={false}
         castShadow
         ref={(mesh) => {
-          // Only attach the correct slot when type matches
-          if (mesh && poolRef.current[idx] && poolRef.current[idx].typeIdx === ti) {
-            poolRef.current[idx].mesh = mesh;
+          // Store every type mesh so spawnObstacle can choose the right one
+          if (mesh && poolRef.current[idx]) {
+            poolRef.current[idx].meshes[ti] = mesh;
           }
         }}
         position={[0, type.h / 2 - 0.4, -200]}
@@ -313,8 +319,8 @@ function ObstacleManager({ stateRef, onCollision }) {
           roughness={0.6}
         />
       </mesh>
-    ));
-  });
+    ))
+  );
 
   return <group ref={groupRef}>{poolMeshes}</group>;
 }
