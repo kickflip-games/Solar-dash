@@ -76,8 +76,11 @@ export default function App() {
         />
       )}
 
-      {/* HUD only shown while actively playing */}
-      {gameState === 'playing' && (
+      {/* HUD shown whenever we are past the title screen so the <video> element
+          stays mounted (and videoRef stays valid) across the gameover → restart
+          transition. GameOverScreen sits at a higher z-index and its full-screen
+          overlay intercepts pointer events, so there are no visual conflicts. */}
+      {gameState !== 'title' && (
         <HUD
           score={score}
           handDetected={handDetected}
