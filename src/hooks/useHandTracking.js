@@ -7,8 +7,8 @@
 //  3. Feeds each video frame to the detector.
 //  4. Exposes { fingerX, handDetected, videoRef, canvasRef }
 //
-// fingerX is in [0, 1], mirrored so moving your hand LEFT gives a LOWER value
-// and moving RIGHT gives a HIGHER value (mirrors the physical intuition).
+// fingerX is in [0, 1]. Moving your hand LEFT gives a LOWER value and moving
+// RIGHT gives a HIGHER value (matches the selfie-mirrored camera display).
 //
 // Only the index-finger TIP (landmark 8) X is used.
 // Y is intentionally ignored as specified in the design.
@@ -142,9 +142,10 @@ export function useHandTracking({ enabled = true } = {}) {
 
           if (results.multiHandLandmarks?.length) {
             const tip = results.multiHandLandmarks[0][8]; // index fingertip
-            // MediaPipe X is mirrored by default in selfie mode – 0=left, 1=right
-            // We keep it as-is: left side of screen = 0, right = 1.
-            rawXRef.current = tip.x;
+            // MediaPipe X is NOT mirrored – it reflects the raw camera feed.
+            // The video is displayed with CSS scaleX(-1) (selfie mirror), so we
+            // invert here to match: user moves hand LEFT → lower fingerX value.
+            rawXRef.current = 1 - tip.x;
 
             if (!handDetectedRef.current) {
               handDetectedRef.current = true;
