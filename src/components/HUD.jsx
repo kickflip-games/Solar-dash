@@ -72,18 +72,19 @@ export default function HUD({ score, handDetected, lane, fingerX, videoRef, canv
         <button style={styles.camToggle} onClick={() => setShowCam(v => !v)}>
           {showCam ? '🎥 Hide Cam' : '🎥 Show Cam'}
         </button>
-        {showCam && (
-          <div style={styles.camContainer}>
-            <video
-              ref={videoRef}
-              style={styles.camVideo}
-              playsInline
-              muted
-              autoPlay
-            />
-            <canvas ref={canvasRef} style={styles.camCanvas} width={320} height={240} />
-          </div>
-        )}
+        {/* Keep video/canvas always mounted so the stream + canvas ref stay intact.
+            Toggling display via CSS avoids unmounting, which would detach the stream
+            from the <video> element and cause the skeleton overlay to disappear. */}
+        <div style={{ ...styles.camContainer, display: showCam ? 'block' : 'none' }}>
+          <video
+            ref={videoRef}
+            style={styles.camVideo}
+            playsInline
+            muted
+            autoPlay
+          />
+          <canvas ref={canvasRef} style={styles.camCanvas} width={320} height={240} />
+        </div>
       </div>
     </div>
   );
