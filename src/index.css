@@ -23,3 +23,13 @@ body, html {
   50%       { opacity: 0.5; }
 }
 
+@keyframes scorePopupRise {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-32px) scale(1.05);
+  }
+}

@@ -25,14 +25,24 @@ export const TILE_SPEED_MAX       = 40;
 export const SPEED_RAMP_RATE      = 0.8;  // units added to speed per second
 
 // Obstacles
+export const OBSTACLE_COLOR = '#ff6a6a';
 export const OBSTACLE_SPAWN_INTERVAL_START = 1.8;  // seconds between spawns
 export const OBSTACLE_SPAWN_INTERVAL_MIN   = 0.55;
 export const SPAWN_INTERVAL_DECAY          = 0.003; // subtracted per second
 export const OBSTACLE_TYPES = [
-  { id: 'wall',   w: 1.4, h: 2.0, d: 0.8, color: '#e05050' },
-  { id: 'pillar', w: 1.0, h: 3.0, d: 1.0, color: '#d06030' },
-  { id: 'low',    w: 2.2, h: 0.7, d: 1.2, color: '#4090e0' },
+  { id: 'wall',   w: 1.4, h: 2.0, d: 0.8, color: OBSTACLE_COLOR },
+  { id: 'pillar', w: 1.0, h: 3.0, d: 1.0, color: OBSTACLE_COLOR },
+  { id: 'low',    w: 2.2, h: 0.7, d: 1.2, color: OBSTACLE_COLOR },
 ];
+
+// Pickups/bonus pickups
+export const PICKUP_COLOR = '#ffe066';
+export const PICKUP_SIZE = 0.45;
+export const PICKUP_SCORE_VALUE = 15;
+export const PICKUP_SPAWN_INTERVAL_START = 3.5;
+export const PICKUP_SPAWN_INTERVAL_MIN   = 1.2;
+export const PICKUP_SPAWN_INTERVAL_DECAY = 0.0025;
+export const PICKUP_POOL_SIZE = 10;
 export const OBSTACLE_SPAWN_Z   = -80;    // how far ahead obstacles spawn
 export const OBSTACLE_DESPAWN_Z =  10;    // remove when behind camera
 

@@ -3,12 +3,22 @@
 // Overlaid on top of the canvas. Shows score, hand tracking status, lane, speed.
 // Also shows the small webcam preview with landmark overlay canvas.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-export default function HUD({ score, handDetected, lane, fingerX, videoRef, canvasRef, speed }) {
+export default function HUD({ score, handDetected, lane, fingerX, videoRef, canvasRef, speed, pickupEvent }) {
   const [showCam, setShowCam] = useState(true);
+  const [scorePopups, setScorePopups] = useState([]);
 
   const laneNames = ['LEFT', 'CENTER', 'RIGHT'];
+
+  useEffect(() => {
+    if (!pickupEvent) return;
+    setScorePopups((prev) => [...prev, pickupEvent]);
+    const timeout = setTimeout(() => {
+      setScorePopups((prev) => prev.filter((popup) => popup.id !== pickupEvent.id));
+    }, 1100);
+    return () => clearTimeout(timeout);
+  }, [pickupEvent]);
 
   return (
     <div style={styles.hud} aria-label="HUD">
@@ -16,7 +26,22 @@ export default function HUD({ score, handDetected, lane, fingerX, videoRef, canv
       <div style={styles.topBar}>
         <div style={styles.scoreBox}>
           <span style={styles.scoreLabel}>SCORE</span>
-          <span style={styles.scoreValue}>{Math.floor(score).toLocaleString()}</span>
+          <div style={styles.scoreValueContainer}>
+            <span style={styles.scoreValue}>{Math.floor(score).toLocaleString()}</span>
+            <div style={styles.popupLayer}>
+              {scorePopups.map((popup, idx) => (
+                <span
+                  key={popup.id}
+                  style={{
+                    ...styles.scorePopup,
+                    animationDelay: `${idx * 0.08}s`,
+                  }}
+                >
+                  +{popup.value}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
         <div style={styles.statusBox}>
           <div style={handDetected ? styles.handOk : styles.handLost}>
@@ -86,6 +111,32 @@ const styles = {
     fontSize: 30, fontWeight: 900, color: '#ffe066',
     textShadow: '0 0 12px rgba(255,200,0,0.7)',
     lineHeight: 1,
+    position: 'relative',
+    zIndex: 1,
+  },
+  scoreValueContainer: {
+    position: 'relative',
+    display: 'inline-flex',
+    alignItems: 'flex-start',
+  },
+  popupLayer: {
+    position: 'absolute',
+    top: -10,
+    right: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    pointerEvents: 'none',
+    gap: 2,
+    overflow: 'visible',
+  },
+  scorePopup: {
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: 1.5,
+    color: '#ffe066',
+    textShadow: '0 0 12px rgba(255, 210, 120, 0.9)',
+    animation: 'scorePopupRise 1s ease-out forwards',
   },
   statusBox: {
     display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4,

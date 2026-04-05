@@ -18,6 +18,7 @@ export default function App() {
   const [gameState, setGameState] = useState('title'); // 'title' | 'playing' | 'gameover'
   const [score,     setScore]     = useState(0);
   const [speed,     setSpeed]     = useState(14);
+  const [lastPickupEvent, setLastPickupEvent] = useState(null);
 
   // sceneKey forces RunnerScene to remount (full reset) on restart
   const [sceneKey, setSceneKey] = useState(0);
@@ -50,6 +51,13 @@ export default function App() {
     setGameState('gameover');
   }, []);
 
+  const handlePickup = useCallback((points) => {
+    setLastPickupEvent({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      value: points,
+    });
+  }, []);
+
   const handleRestart = useCallback(() => {
     setScore(0);
     setSpeed(14);
@@ -64,16 +72,17 @@ export default function App() {
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#0a0a1a' }}>
       {/* 3D scene is rendered whenever we are past the title screen */}
       {gameState !== 'title' && (
-        <RunnerScene
-          key={sceneKey}
-          fingerX={fingerX}
-          handDetected={handDetected}
-          lastHandRef={lastHandRef}
-          onScoreUpdate={handleScoreUpdate}
-          onCollision={handleCollision}
-          onSpeedUpdate={handleSpeedUpdate}
-          running={gameState === 'playing'}
-        />
+      <RunnerScene
+        key={sceneKey}
+        fingerX={fingerX}
+        handDetected={handDetected}
+        lastHandRef={lastHandRef}
+        onScoreUpdate={handleScoreUpdate}
+        onCollision={handleCollision}
+        onSpeedUpdate={handleSpeedUpdate}
+        onPickup={handlePickup}
+        running={gameState === 'playing'}
+      />
       )}
 
       {/* HUD shown whenever we are past the title screen so the <video> element
@@ -81,15 +90,16 @@ export default function App() {
           transition. GameOverScreen sits at a higher z-index and its full-screen
           overlay intercepts pointer events, so there are no visual conflicts. */}
       {gameState !== 'title' && (
-        <HUD
-          score={score}
-          handDetected={handDetected}
-          lane={displayLane}
-          fingerX={fingerX}
-          videoRef={videoRef}
-          canvasRef={canvasRef}
-          speed={speed}
-        />
+      <HUD
+        score={score}
+        handDetected={handDetected}
+        lane={displayLane}
+        fingerX={fingerX}
+        videoRef={videoRef}
+        canvasRef={canvasRef}
+        speed={speed}
+        pickupEvent={lastPickupEvent}
+      />
       )}
 
       {/* Screen overlays */}

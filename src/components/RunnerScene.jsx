@@ -16,7 +16,7 @@
 //   4. Result: smooth, forgiving steering without teleporting
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
@@ -33,12 +33,20 @@ import {
   TILE_SPEED_START,
   TILE_SPEED_MAX,
   SPEED_RAMP_RATE,
+  OBSTACLE_COLOR,
   OBSTACLE_SPAWN_INTERVAL_START,
   OBSTACLE_SPAWN_INTERVAL_MIN,
   SPAWN_INTERVAL_DECAY,
   OBSTACLE_TYPES,
   OBSTACLE_SPAWN_Z,
   OBSTACLE_DESPAWN_Z,
+  PICKUP_COLOR,
+  PICKUP_SIZE,
+  PICKUP_SCORE_VALUE,
+  PICKUP_SPAWN_INTERVAL_START,
+  PICKUP_SPAWN_INTERVAL_MIN,
+  PICKUP_SPAWN_INTERVAL_DECAY,
+  PICKUP_POOL_SIZE,
   TRACK_WIDTH,
   FOG_COLOR,
   FOG_NEAR,
@@ -325,6 +333,193 @@ function ObstacleManager({ stateRef, onCollision }) {
   return <group ref={groupRef}>{poolMeshes}</group>;
 }
 
+// ─── Sparkle burst effect for pickups ───────────────────────────────────────
+function SparkleBurst({ position, color, onComplete }) {
+  const groupRef = useRef();
+  const particleRefs = useRef([]);
+  const ageRef = useRef(0);
+  const doneRef = useRef(false);
+  const particles = useMemo(() => (
+    Array.from({ length: 10 }, () => ({
+      velocity: new THREE.Vector3(
+        (Math.random() - 0.5) * 1.7,
+        Math.random() * 1.3 + 0.3,
+        (Math.random() - 0.5) * 1.7,
+      ),
+    }))
+  ), []);
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return;
+    const age = ageRef.current + delta;
+    ageRef.current = age;
+    const intensity = Math.max(0, 1 - age / 0.85);
+    groupRef.current.rotation.y += delta * 1.6;
+
+    particles.forEach((particle, index) => {
+      const mesh = particleRefs.current[index];
+      if (!mesh) return;
+      mesh.position.addScaledVector(particle.velocity, delta * 2.4);
+      const scale = 0.05 + intensity * 0.4;
+      mesh.scale.setScalar(scale);
+      if (mesh.material) {
+        mesh.material.opacity = intensity;
+      }
+    });
+
+    if (age > 0.8 && !doneRef.current) {
+      doneRef.current = true;
+      if (onComplete) onComplete();
+    }
+  });
+
+  return (
+    <group ref={groupRef} position={position}>
+      {particles.map((_, idx) => (
+        <mesh
+          key={`spark-${idx}`}
+          ref={(mesh) => {
+            particleRefs.current[idx] = mesh;
+          }}
+        >
+          <sphereGeometry args={[0.06, 6, 6]} />
+          <meshStandardMaterial
+            color={color}
+            emissive={color}
+            emissiveIntensity={1.2}
+            metalness={0.3}
+            roughness={0.2}
+            transparent
+            opacity={1}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ─── Pickup manager ────────────────────────────────────────────────────────
+function PickupManager({ stateRef, onPickup }) {
+  const poolRef = useRef(Array.from({ length: PICKUP_POOL_SIZE }, () => ({
+    active: false,
+    lane: 1,
+    z: OBSTACLE_SPAWN_Z,
+    phase: Math.random() * Math.PI * 2,
+    mesh: null,
+  })));
+  const [sparkleBursts, setSparkleBursts] = useState([]);
+
+  const spawnPickup = useCallback((st) => {
+    const slot = poolRef.current.find(s => !s.active && s.mesh);
+    if (!slot) return;
+
+    const lane = Math.floor(Math.random() * 3);
+    slot.active = true;
+    slot.lane = lane;
+    slot.phase = Math.random() * Math.PI * 2;
+    slot.z = OBSTACLE_SPAWN_Z;
+    slot.mesh.position.set(LANE_OFFSETS[lane], 0.5, OBSTACLE_SPAWN_Z);
+    slot.mesh.visible = true;
+    st.pickups.push(slot);
+  }, []);
+
+  const addSparkle = useCallback((position) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setSparkleBursts(prev => [...prev, { id, position }]);
+  }, []);
+
+  const removeSparkle = useCallback((id) => {
+    setSparkleBursts(prev => prev.filter(burst => burst.id !== id));
+  }, []);
+
+  useFrame((_, delta) => {
+    const st = stateRef.current;
+    if (st.dead) return;
+
+    st.pickupInterval = Math.max(
+      PICKUP_SPAWN_INTERVAL_MIN,
+      PICKUP_SPAWN_INTERVAL_START - st.elapsed * PICKUP_SPAWN_INTERVAL_DECAY
+    );
+    st.pickupTimer += delta;
+    if (st.pickupTimer >= st.pickupInterval) {
+      st.pickupTimer = 0;
+      spawnPickup(st);
+    }
+
+    for (let i = st.pickups.length - 1; i >= 0; i--) {
+      const slot = st.pickups[i];
+      if (!slot.active || !slot.mesh) continue;
+
+      slot.mesh.position.z += st.speed * delta;
+      slot.z = slot.mesh.position.z;
+      slot.mesh.position.y = 0.5 + Math.sin(slot.phase + slot.z * 0.12) * 0.25;
+      slot.mesh.rotation.y += delta * 1.8;
+
+      if (slot.z > OBSTACLE_DESPAWN_Z) {
+        slot.active = false;
+        slot.mesh.visible = false;
+        st.pickups.splice(i, 1);
+        continue;
+      }
+
+      const dx = Math.abs(st.playerX - slot.mesh.position.x);
+      const dz = Math.abs(slot.mesh.position.z);
+      if (dz < 1.1 && dx < 0.9) {
+        const sparklePos = [
+          slot.mesh.position.x,
+          slot.mesh.position.y,
+          slot.mesh.position.z,
+        ];
+        slot.active = false;
+        slot.mesh.visible = false;
+        st.pickups.splice(i, 1);
+        st.score += PICKUP_SCORE_VALUE;
+        if (onPickup) onPickup(PICKUP_SCORE_VALUE);
+        addSparkle(sparklePos);
+      }
+    }
+  });
+
+  const pickupMeshes = Array.from({ length: PICKUP_POOL_SIZE }, (_, idx) => (
+    <mesh
+      key={`pickup-${idx}`}
+      visible={false}
+      castShadow
+      ref={(mesh) => {
+        if (mesh && poolRef.current[idx]) {
+          poolRef.current[idx].mesh = mesh;
+        }
+      }}
+      position={[0, 0.45, -200]}
+    >
+      <octahedronGeometry args={[PICKUP_SIZE, 0]} />
+      <meshStandardMaterial
+        color={PICKUP_COLOR}
+        emissive={PICKUP_COLOR}
+        emissiveIntensity={0.85}
+        metalness={0.5}
+        roughness={0.25}
+        transparent
+        opacity={0.9}
+      />
+    </mesh>
+  ));
+
+  return (
+    <group>
+      {pickupMeshes}
+      {sparkleBursts.map((burst) => (
+        <SparkleBurst
+          key={burst.id}
+          position={burst.position}
+          color={PICKUP_COLOR}
+          onComplete={() => removeSparkle(burst.id)}
+        />
+      ))}
+    </group>
+  );
+}
+
 // ─── Camera rig ──────────────────────────────────────────────────────────────
 // Follows the player X with a tilt when changing lanes.
 // Camera is accessed via the useFrame state argument to avoid the
@@ -353,7 +548,7 @@ function CameraRig({ stateRef }) {
 }
 
 // ─── Scene contents (must be inside Canvas) ───────────────────────────────────
-function SceneContents({ stateRef, fingerX, handDetected, lastHandRef, onCollision }) {
+function SceneContents({ stateRef, fingerX, handDetected, lastHandRef, onCollision, onPickup }) {
   return (
     <>
       {/* Fog */}
@@ -378,6 +573,7 @@ function SceneContents({ stateRef, fingerX, handDetected, lastHandRef, onCollisi
         lastHandRef={lastHandRef}
       />
       <ObstacleManager stateRef={stateRef} onCollision={onCollision} />
+      <PickupManager stateRef={stateRef} onPickup={onPickup} />
       <CameraRig stateRef={stateRef} />
     </>
   );
@@ -391,6 +587,7 @@ export default function RunnerScene({
   onScoreUpdate,
   onCollision,
   onSpeedUpdate,
+  onPickup,
   running,
 }) {
   // Game state lives in a ref (not React state) so updates don't cause re-renders
@@ -400,9 +597,12 @@ export default function RunnerScene({
     speed: TILE_SPEED_START,
     score: 0,
     elapsed: 0,
+    pickups: [],
     obstacles: [],
     timeSinceSpawn: 0,
     spawnInterval: OBSTACLE_SPAWN_INTERVAL_START,
+    pickupTimer: 0,
+    pickupInterval: PICKUP_SPAWN_INTERVAL_START,
     dead: false,
   });
 
@@ -444,6 +644,7 @@ export default function RunnerScene({
         handDetected={handDetected}
         lastHandRef={lastHandRef}
         onCollision={handleCollision}
+        onPickup={onPickup}
       />
     </Canvas>
   );
